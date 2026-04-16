@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doctor Dashboard | LifeQR</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script src="qr-scanner.js"></script>
+  <script src="api-utils.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-headline { font-family: 'Manrope', sans-serif; }
+    .hero-gradient { background: linear-gradient(135deg, #6818f4 0%, #4f3bb3 100%); }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(128, 75, 255, 0.15);
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-white min-h-screen">
+  
+  <!-- Header -->
+  <header class="px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-gray-200/50">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="text-[#6818f4]">
+          <svg fill="currentColor" viewBox="0 0 48 48" class="w-7 h-7">
+            <path d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z"></path>
+          </svg>
+        </div>
+        <h1 class="font-headline text-xl font-extrabold bg-gradient-to-r from-[#6818f4] to-[#5c4dbe] bg-clip-text text-transparent">LifeQR</h1>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">DOCTOR</span>
+        <span class="text-sm text-gray-600">Dr. <span id="userName" class="font-semibold"></span></span>
+        <button onclick="logout()" class="text-sm text-red-600 hover:text-red-700 font-semibold">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="px-6 py-8 max-w-7xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+      <h2 class="font-headline text-3xl font-bold mb-2">Doctor Dashboard</h2>
+      <p class="text-gray-600">Access patient information and manage your profile</p>
+    </div>
+
+    <div class="grid lg:grid-cols-3 gap-6">
+      <!-- Quick Access Panel -->
+      <div class="lg:col-span-2 space-y-6">
+        
+        <!-- Patient Search -->
+        <div class="glass-card rounded-3xl p-8 shadow-xl border-2 border-blue-200">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center">
+              <span class="material-symbols-outlined text-white text-3xl">search</span>
+            </div>
+            <div>
+              <h3 class="font-headline text-2xl font-bold">Quick Patient Access</h3>
+              <p class="text-sm text-gray-600">Search or scan patient QR code</p>
+            </div>
+          </div>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold mb-2">Patient QR Code ID</label>
+              <div class="flex gap-3">
+                <input 
+                  type="text" 
+                  id="patientQrId" 
+                  placeholder="Enter QR Code ID or scan"
+                  class="flex-1 px-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-lg"
+                >
+                <button 
+                  onclick="searchPatient()" 
+                  class="bg-blue-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg"
+                >
+                  <span class="material-symbols-outlined">search</span>
+                  Search
+                </button>
+              </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-3">
+              <button 
+                onclick="window.location.href='emergency_access.html'" 
+                class="bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2"
+              >
+                <span class="material-symbols-outlined">local_hospital</span>
+                Emergency Access Page
+              </button>
+              <button 
+                onclick="triggerQRCodeScanner()" 
+                class="bg-purple-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2"
+              >
+                <span class="material-symbols-outlined">qr_code_scanner</span>
+                Scan QR Code
+              </button>
+            </div>
+
+            <div id="searchError" class="hidden bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm font-semibold"></div>
+          </div>
+        </div>
+
+        <!-- Patient Result Panel -->
+        <div id="patientResult" class="glass-card rounded-3xl p-6 shadow-xl hidden">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <p class="text-sm text-gray-500">Patient Summary</p>
+              <h4 id="patientResultName" class="text-xl font-semibold text-blue-900">Loading...</h4>
+            </div>
+            <span id="patientAccessBadge" class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Shared</span>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4 mb-4">
+            <div class="space-y-2">
+              <p class="text-sm text-gray-500">QR Code ID</p>
+              <p id="patientResultQr" class="font-semibold"></p>
+            </div>
+            <div class="space-y-2">
+              <p class="text-sm text-gray-500">Blood Group</p>
+              <p id="patientResultBlood" class="font-semibold"></p>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4 mb-4">
+            <div class="space-y-2">
+              <p class="text-sm text-gray-500">Age</p>
+              <p id="patientResultAge" class="font-semibold"></p>
+            </div>
+            <div class="space-y-2">
+              <p class="text-sm text-gray-500">Emergency Contact</p>
+              <p id="patientResultContact" class="font-semibold"></p>
+            </div>
+          </div>
+
+          <div id="patientPrivateNotice" class="hidden rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900 mb-4">
+            This patient has a private profile. Sensitive details are restricted unless authorized.
+          </div>
+
+          <div class="grid lg:grid-cols-2 gap-4">
+            <div class="bg-slate-50 rounded-2xl p-4">
+              <h5 class="font-semibold mb-3 text-sm">Recent Reports</h5>
+              <div id="doctorReportList" class="space-y-2 text-xs text-gray-700"></div>
+            </div>
+            <div class="bg-slate-50 rounded-2xl p-4">
+              <h5 class="font-semibold mb-3 text-sm">SOS Alerts</h5>
+              <div id="doctorSosList" class="space-y-2 text-xs text-gray-700"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Scanned Patients -->
+        <div class="glass-card rounded-3xl p-6 shadow-xl">
+          <h3 class="font-headline text-xl font-bold mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-blue-600">history</span>
+            Recently Scanned Patients
+          </h3>
+          <div id="recentScannedList" class="space-y-3">
+            <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-xl text-center justify-center">
+              <span class="text-sm text-gray-500">No recent scans</span>
+            </div>
+          </div>
+
+        <!-- Recent Activity -->
+        <div class="glass-card rounded-3xl p-6 shadow-xl">
+          <h3 class="font-headline text-xl font-bold mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-purple-600">history</span>
+            Recent Activity
+          </h3>
+          <div id="recentActivity" class="space-y-3">
+            <div class="flex items-center gap-3 p-3 bg-white rounded-xl">
+              <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <span class="material-symbols-outlined text-green-600">check_circle</span>
+              </div>
+              <div class="flex-1">
+                <p class="font-semibold text-sm">System Active</p>
+                <p class="text-xs text-gray-600">Ready to access patient information</p>
+              </div>
+              <span class="text-xs text-gray-400">Now</span>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="glass-card rounded-2xl p-6 shadow-xl">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+              <span class="material-symbols-outlined text-blue-600">verified_user</span>
+            </div>
+            <div>
+              <p class="text-sm text-gray-600">Status</p>
+              <p class="font-bold text-lg">Active</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6 shadow-xl">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+              <span class="material-symbols-outlined text-purple-600">shield</span>
+            </div>
+            <div>
+              <p class="text-sm text-gray-600">Access</p>
+              <p class="font-bold text-lg">Verified</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+      <div class="lg:col-span-1 space-y-6">
+        <div class="glass-card rounded-3xl p-6 shadow-xl sticky top-6">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="font-headline text-xl font-bold">My Profile</h3>
+            <button onclick="toggleEditMode()" id="editBtn" class="text-purple-600 hover:text-purple-700 font-semibold text-sm flex items-center gap-1">
+              <span class="material-symbols-outlined text-lg">edit</span>
+              Edit
+            </button>
+          </div>
+
+          <div class="text-center mb-6">
+            <div class="w-24 h-24 rounded-full hero-gradient mx-auto mb-3 flex items-center justify-center text-white text-3xl font-bold">
+              <span class="material-symbols-outlined text-5xl">medical_services</span>
+            </div>
+            <h4 class="font-bold text-lg" id="profileName">Loading...</h4>
+            <p class="text-sm text-gray-600" id="profileEmail"></p>
+          </div>
+
+          <form id="profileForm" class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold mb-2">Full Name</label>
+              <input type="text" id="name" disabled class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-sm">
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold mb-2">Email</label>
+              <input type="email" id="email" disabled class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-sm">
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold mb-2">Specialization</label>
+              <input type="text" id="specialization" disabled placeholder="e.g., Cardiology" class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-sm">
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold mb-2">License Number</label>
+              <input type="text" id="licenseNumber" disabled class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-sm">
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold mb-2">Hospital/Clinic</label>
+              <input type="text" id="hospital" disabled class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-sm">
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold mb-2">Phone</label>
+              <input type="tel" id="phone" disabled class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-sm">
+            </div>
+
+            <div id="successMessage" class="hidden bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm"></div>
+            <div id="errorMessage" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"></div>
+
+            <div id="saveButtonContainer" class="hidden">
+              <button type="submit" class="w-full hero-gradient text-white px-6 py-3 rounded-xl font-bold">
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Determine API URL based on current location
+    const API_URL = window.location.origin + '/api';
+    let isEditMode = false;
+
+    function addRecentScan(data) {
+      const scans = JSON.parse(localStorage.getItem('doctorRecentScans') || '[]');
+      scans.unshift({
+        name: data.name,
+        qrCodeId: data.qrCodeId || 'unknown',
+        timestamp: new Date().toISOString(),
+        age: data.age,
+        bloodGroup: data.bloodGroup
+      });
+      localStorage.setItem('doctorRecentScans', JSON.stringify(scans.slice(0, 10)));
+      displayRecentScans();
+    }
+
+    function displayRecentScans() {
+      const scans = JSON.parse(localStorage.getItem('doctorRecentScans') || '[]');
+      const list = document.getElementById('recentScannedList');
+      if (!list) return;
+      list.innerHTML = '';
+
+      if (scans.length === 0) {
+        list.innerHTML = '<div class="flex items-center gap-3 p-4 bg-gray-50 rounded-xl text-center justify-center"><span class="text-sm text-gray-500">No recent scans</span></div>';
+        return;
+      }
+
+      scans.forEach(scan => {
+        const date = new Date(scan.timestamp);
+        const item = document.createElement('div');
+        item.className = 'flex items-center gap-3 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition cursor-pointer';
+        item.innerHTML = `
+          <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <span class="material-symbols-outlined text-blue-600 text-lg">person</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-sm">${scan.name}</p>
+            <p class="text-xs text-gray-600">QR: ${scan.qrCodeId} • Age: ${scan.age || 'N/A'}</p>
+          </div>
+          <span class="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">${date.toLocaleTimeString()}</span>
+        `;
+        item.onclick = () => {
+          document.getElementById('patientQrId').value = scan.qrCodeId;
+          searchPatient();
+        };
+        list.appendChild(item);
+      });
+    }
+
+    // Check authentication
+    window.addEventListener('load', async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = 'lifeqr_login.html';
+        return;
+      }
+
+      const user = await verifyToken();
+      if (!user || user.role !== 'doctor') {
+        localStorage.clear();
+        window.location.href = 'lifeqr_login.html';
+        return;
+      }
+
+      document.getElementById('userName').textContent = user.name || localStorage.getItem('userName') || 'Doctor';
+      await loadProfile();
+      displayRecentScans();
+    });
+
+    async function loadProfile() {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/patient/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) throw new Error('Failed to load profile');
+
+        const userData = await parseApiResponse(response);
+        
+        document.getElementById('name').value = userData.name || '';
+        document.getElementById('email').value = userData.email || '';
+        document.getElementById('specialization').value = userData.specialization || '';
+        document.getElementById('licenseNumber').value = userData.licenseNumber || '';
+        document.getElementById('hospital').value = userData.hospital || '';
+        document.getElementById('phone').value = userData.phone || '';
+        
+        document.getElementById('profileName').textContent = 'Dr. ' + (userData.name || 'Doctor');
+        document.getElementById('profileEmail').textContent = userData.email || '';
+      } catch (error) {
+        console.error('Error loading profile:', error);
+      }
+    }
+
+    function toggleEditMode() {
+      isEditMode = !isEditMode;
+      const inputs = document.querySelectorAll('#profileForm input');
+      
+      inputs.forEach(input => {
+        if (input.id !== 'email') {
+          input.disabled = !isEditMode;
+          input.classList.toggle('bg-gray-50', !isEditMode);
+          input.classList.toggle('bg-white', isEditMode);
+        }
+      });
+
+      document.getElementById('saveButtonContainer').classList.toggle('hidden', !isEditMode);
+      document.getElementById('editBtn').innerHTML = isEditMode 
+        ? '<span class="material-symbols-outlined text-lg">close</span> Cancel'
+        : '<span class="material-symbols-outlined text-lg">edit</span> Edit';
+    }
+
+    document.getElementById('profileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      try {
+        const token = localStorage.getItem('token');
+        const formData = {
+          name: document.getElementById('name').value,
+          specialization: document.getElementById('specialization').value,
+          licenseNumber: document.getElementById('licenseNumber').value,
+          hospital: document.getElementById('hospital').value,
+          phone: document.getElementById('phone').value
+        };
+
+        const response = await fetch(`${API_URL}/patient/update`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) throw new Error('Failed to update profile');
+
+        showSuccess('Profile updated successfully!');
+        toggleEditMode();
+        await loadProfile();
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        showError('Failed to update profile');
+      }
+    });
+
+    async function searchPatient() {
+      const qrId = document.getElementById('patientQrId').value.trim();
+      const errorDiv = document.getElementById('searchError');
+      
+      errorDiv.classList.add('hidden');
+      
+      if (!qrId) {
+        errorDiv.textContent = 'Please enter a QR Code ID';
+        errorDiv.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/patient/doctor/patient/${qrId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const patientData = await parseApiResponse(response);
+        if (!response.ok) {
+          throw new Error(patientData.error || 'Patient lookup failed');
+        }
+        
+        // Log the scan
+        try {
+          await fetch(`${API_URL}/patient/log-scan/${qrId}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } catch (scanError) {
+          console.error('Error logging scan:', scanError);
+          // Non-critical error, don't show to user
+        }
+        
+        renderPatientResult(patientData, qrId);
+      } catch (error) {
+        console.error('Error searching patient:', error);
+        errorDiv.textContent = error.message || 'Unable to fetch patient details. Please try again.';
+        errorDiv.classList.remove('hidden');
+      }
+    }
+
+    function triggerQRCodeScanner() {
+      initQRScanner(
+        (qrValue) => {
+          document.getElementById('patientQrId').value = qrValue;
+          searchPatient();
+        },
+        (error) => {
+          const errorDiv = document.getElementById('searchError');
+          errorDiv.textContent = 'Camera error: ' + error;
+          errorDiv.classList.remove('hidden');
+          setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+        }
+      );
+      startQRScanner();
+    }
+
+    function renderPatientResult(data, qrId) {
+      document.getElementById('patientResult').classList.remove('hidden');
+      document.getElementById('patientResultName').textContent = data.name || 'Unknown Patient';
+      document.getElementById('patientResultQr').textContent = qrId;
+      document.getElementById('patientResultBlood').textContent = data.bloodGroup || 'Not specified';
+      document.getElementById('patientResultAge').textContent = data.age || 'Not specified';
+      document.getElementById('patientResultContact').textContent = data.emergencyContact?.phone || 'Not specified';
+      document.getElementById('patientAccessBadge').textContent = data.authorized ? 'Authorized' : (data.publicProfile ? 'Public' : 'Restricted');
+      document.getElementById('patientPrivateNotice').classList.toggle('hidden', !data.privateProfile);
+      addRecentScan(data);
+      const reportList = document.getElementById('doctorReportList');
+      reportList.innerHTML = '';
+      if (data.reports?.length) {
+        data.reports.slice(0, 5).forEach(report => {
+          const item = document.createElement('div');
+          item.className = 'rounded-2xl border border-gray-200 p-3 bg-white';
+          item.innerHTML = `
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="font-semibold">${report.originalName}</p>
+                <p class="text-xs text-gray-500">${report.category || 'General'} • ${new Date(report.uploadedAt).toLocaleDateString()}</p>
+              </div>
+              <a href="${API_URL.replace('/api', '')}${report.url}" target="_blank" class="text-blue-600 font-semibold text-xs">View</a>
+            </div>
+            <p class="text-sm text-gray-600 mt-2">${report.description || 'No notes added.'}</p>
+          `;
+          reportList.appendChild(item);
+        });
+      } else {
+        reportList.innerHTML = '<p class="text-sm text-gray-500">No reports available for this patient.</p>';
+      }
+
+      const sosList = document.getElementById('doctorSosList');
+      sosList.innerHTML = '';
+      if (data.sosAlerts?.length) {
+        data.sosAlerts.slice(0, 5).forEach(alert => {
+          const item = document.createElement('div');
+          item.className = 'rounded-2xl border border-gray-200 p-3 bg-white';
+          item.innerHTML = `
+            <p class="font-semibold">${alert.message || 'SOS Alert'}</p>
+            <p class="text-xs text-gray-500">Status: ${alert.status} • ${new Date(alert.createdAt).toLocaleString()}</p>
+            <p class="text-sm text-gray-600 mt-2">Location: ${alert.location?.lat || '-'} , ${alert.location?.lng || '-'}</p>
+          `;
+          sosList.appendChild(item);
+        });
+      } else {
+        sosList.innerHTML = '<p class="text-sm text-gray-500">No SOS alerts available for this patient.</p>';
+      }
+    }
+
+    function showSuccess(message) {
+      const successDiv = document.getElementById('successMessage');
+      successDiv.textContent = message;
+      successDiv.classList.remove('hidden');
+      setTimeout(() => successDiv.classList.add('hidden'), 5000);
+    }
+
+    function showError(message) {
+      const errorDiv = document.getElementById('errorMessage');
+      errorDiv.textContent = message;
+      errorDiv.classList.remove('hidden');
+      setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'lifeqr_login.html';
+    }
+
+    // Allow Enter key to search
+    document.getElementById('patientQrId').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        searchPatient();
+      }
+    });
+
+  </script>
+
+</body>
+</html>

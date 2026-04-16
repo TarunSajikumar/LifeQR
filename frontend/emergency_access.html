@@ -7,8 +7,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script src="qr-scanner.js"></script>
+  <script src="api-utils.js"></script>
   <style>
     body { font-family: 'Inter', sans-serif; }
     .font-headline { font-family: 'Manrope', sans-serif; }
@@ -100,6 +102,9 @@
           <button onclick="hidePatientInfo()" class="text-gray-600 hover:text-gray-800">
             <span class="material-symbols-outlined">close</span>
           </button>
+        </div>
+        <div id="privateProfileNotice" class="hidden mb-6 p-4 rounded-2xl bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+          The patient has chosen a private profile setting. Only core emergency details are shown.
         </div>
 
         <!-- Critical Information Grid -->
@@ -207,7 +212,8 @@
   </main>
 
   <script>
-    const API_URL = window.location.port === '5000' ? window.location.origin + '/api' : 'http://localhost:5000/api';
+    // Determine API URL based on current location
+    const API_URL = window.location.origin + '/api';
     let currentPatientData = null;
 
     // Check if URL has QR code ID parameter
@@ -240,8 +246,26 @@
           throw new Error('Patient not found');
         }
 
-        const patientData = await response.json();
+        const patientData = await parseApiResponse(response);
         currentPatientData = patientData;
+        
+        // Log the scan if user is authenticated
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
+            await fetch(`${API_URL}/patient/log-scan/${qrCodeId}`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+          } catch (scanError) {
+            console.error('Error logging scan:', scanError);
+            // Non-critical error, don't show to user
+          }
+        }
+        
         displayPatientInfo(patientData);
       } catch (error) {
         console.error('Error fetching patient:', error);
@@ -258,9 +282,10 @@
       
       // Populate detailed info
       document.getElementById('patientName').textContent = data.name || 'Not specified';
-      document.getElementById('allergies').textContent = data.allergies || 'None reported';
-      document.getElementById('medications').textContent = data.medications || 'None reported';
-      document.getElementById('healthIssues').textContent = data.healthIssues || 'None reported';
+      document.getElementById('allergies').textContent = data.privateProfile ? 'Restricted due to private profile' : data.allergies || 'None reported';
+      document.getElementById('medications').textContent = data.privateProfile ? 'Restricted due to private profile' : data.medications || 'None reported';
+      document.getElementById('healthIssues').textContent = data.privateProfile ? 'Restricted due to private profile' : data.healthIssues || 'None reported';
+      document.getElementById('privateProfileNotice').classList.toggle('hidden', !data.privateProfile);
       
       // Emergency contact
       document.getElementById('emergencyName').textContent = data.emergencyContact?.name || 'Not specified';
@@ -394,22 +419,37 @@
      * Scan QR Code using camera
      */
     function scanEmergencyQR() {
-      initQRScanner(
+      console.log('🔵 scanEmergencyQR button clicked');
+      
+      // Clear any previous errors
+      const errorDiv = document.getElementById('searchError');
+      errorDiv.classList.add('hidden');
+      
+      // Initialize scanner with on-success and on-error callbacks
+      window.initQRScanner(
+        // ON SUCCESS - QR code was scanned
         (qrValue) => {
-          // Fill the input field with scanned QR code value
+          console.log('✅ SUCCESS: QR code scanned:', qrValue);
           document.getElementById('qrCodeId').value = qrValue;
-          // Automatically search for the patient
           searchPatient();
         },
+        // ON ERROR - Camera permission denied or other error
         (error) => {
+          console.error('❌ ERROR in scanner:', error);
           const errorDiv = document.getElementById('searchError');
-          errorDiv.textContent = 'Camera error: ' + error;
+          errorDiv.innerHTML = `
+            <div style="white-space: pre-wrap; text-align: left;">
+              <strong>📷 Camera Error:</strong><br><br>
+              ${error}
+            </div>
+          `;
           errorDiv.classList.remove('hidden');
         }
       );
       
-      // Start scanning
-      startQRScanner();
+      // This will trigger the browser's camera permission dialog
+      console.log('🔔 Calling startQRScanner - Permission dialog should appear now');
+      window.startQRScanner();
     }
   </script>
 

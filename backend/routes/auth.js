@@ -7,10 +7,39 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-async function generateShortQrCodeId() {
+function formatNamePrefix(name) {
+  if (!name || typeof name !== 'string') return 'USER';
+  const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  if (cleaned.length === 0) return 'USER';
+  return cleaned.length <= 3 ? cleaned : cleaned.slice(0, 3);
+}
+
+function getDateSegment() {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = String(now.getFullYear()).slice(-2);
+  const segments = [day, month, year];
+  return segments[Math.floor(Math.random() * segments.length)];
+}
+
+function randomSuffix(length) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let suffix = '';
+  for (let i = 0; i < length; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return suffix;
+}
+
+async function generatePatientQrCodeId(name) {
   let id;
   do {
-    id = crypto.randomBytes(4).toString('hex');
+    const prefix = formatNamePrefix(name);
+    const dateSegment = getDateSegment();
+    const suffixLength = Math.random() < 0.5 ? 1 : 2;
+    const suffix = randomSuffix(suffixLength);
+    id = `${prefix}${dateSegment}${suffix}`;
   } while (await User.findOne({ qrCodeId: id }));
   return id;
 }
@@ -89,8 +118,8 @@ router.post('/register', async (req, res) => {
         };
       }
       
-      // Generate unique short QR code ID
-      const qrCodeId = await generateShortQrCodeId();
+      // Generate unique patient QR code ID using the requested pattern
+      const qrCodeId = await generatePatientQrCodeId(name);
       userData.qrCodeId = qrCodeId;
       
       // Generate QR code with URL that links to emergency access page

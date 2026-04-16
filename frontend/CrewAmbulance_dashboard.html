@@ -7,8 +7,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script src="qr-scanner.js"></script>
+  <script src="api-utils.js"></script>
   <style>
     body { font-family: 'Inter', sans-serif; }
     .font-headline { font-family: 'Manrope', sans-serif; }
@@ -173,6 +175,19 @@
           </div>
         </div>
 
+        <!-- Recently Scanned Patients -->
+        <div class="glass-card rounded-3xl p-6 shadow-xl">
+          <h3 class="font-headline text-xl font-bold mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-red-600">history</span>
+            Recently Scanned Patients
+          </h3>
+          <div id="recentScannedList" class="space-y-3">
+            <div class="flex items-center gap-3 p-4 bg-gray-50 rounded-xl text-center justify-center">
+              <span class="text-sm text-gray-500">No recent scans</span>
+            </div>
+          </div>
+        </div>
+
         <!-- AI Implementation Placeholder -->
         <div class="glass-card rounded-3xl p-6 shadow-xl border-dashed border-orange-200">
           <div class="flex items-start gap-4">
@@ -313,22 +328,74 @@
   </main>
 
   <script>
-    const API_URL = window.location.port === '5000' ? window.location.origin + '/api' : 'http://localhost:5000/api';
+    // Determine API URL based on current location
+    const API_URL = window.location.origin + '/api';
     let isEditMode = false;
+
+    function addRecentScan(data) {
+      const scans = JSON.parse(localStorage.getItem('crewRecentScans') || '[]');
+      scans.unshift({
+        name: data.name,
+        qrCodeId: data.qrCodeId || 'unknown',
+        timestamp: new Date().toISOString(),
+        age: data.age,
+        bloodGroup: data.bloodGroup
+      });
+      localStorage.setItem('crewRecentScans', JSON.stringify(scans.slice(0, 10)));
+      displayRecentScans();
+    }
+
+    function displayRecentScans() {
+      const scans = JSON.parse(localStorage.getItem('crewRecentScans') || '[]');
+      const list = document.getElementById('recentScannedList');
+      if (!list) return;
+      list.innerHTML = '';
+
+      if (scans.length === 0) {
+        list.innerHTML = '<div class="flex items-center gap-3 p-4 bg-gray-50 rounded-xl text-center justify-center"><span class="text-sm text-gray-500">No recent scans</span></div>';
+        return;
+      }
+
+      scans.forEach(scan => {
+        const date = new Date(scan.timestamp);
+        const item = document.createElement('div');
+        item.className = 'flex items-center gap-3 p-4 bg-white rounded-xl border border-gray-200 hover:shadow-md transition cursor-pointer';
+        item.innerHTML = `
+          <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+            <span class="material-symbols-outlined text-red-600 text-lg">person</span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-sm">${scan.name}</p>
+            <p class="text-xs text-gray-600">QR: ${scan.qrCodeId} • Age: ${scan.age || 'N/A'} • Blood: ${scan.bloodGroup || 'N/A'}</p>
+          </div>
+          <span class="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">${date.toLocaleTimeString()}</span>
+        `;
+        item.onclick = () => {
+          document.getElementById('patientQrId').value = scan.qrCodeId;
+          searchPatient();
+        };
+        list.appendChild(item);
+      });
+    }
 
     // Check authentication
     window.addEventListener('load', async () => {
       const token = localStorage.getItem('token');
-      const role = localStorage.getItem('userRole');
-      
-      if (!token || role !== 'crew') {
+      if (!token) {
         window.location.href = 'lifeqr_login.html';
         return;
       }
 
-      const userName = localStorage.getItem('userName') || 'Crew Member';
-      document.getElementById('userName').textContent = userName;
+      const user = await verifyToken();
+      if (!user || user.role !== 'crew') {
+        localStorage.clear();
+        window.location.href = 'lifeqr_login.html';
+        return;
+      }
+
+      document.getElementById('userName').textContent = user.name || localStorage.getItem('userName') || 'Crew Member';
       await loadProfile();
+      displayRecentScans();
     });
 
     async function loadProfile() {
@@ -342,7 +409,7 @@
 
         if (!response.ok) throw new Error('Failed to load profile');
 
-        const userData = await response.json();
+        const userData = await parseApiResponse(response);
         
         document.getElementById('name').value = userData.name || '';
         document.getElementById('email').value = userData.email || '';
@@ -423,23 +490,47 @@
         return;
       }
 
-      window.location.href = `emergency_access.html?id=${qrId}`;
+      // Fetch patient data to track in recent scans
+      fetch(`${API_URL}/patient/profile/${qrId}`)
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('Patient not found');
+        })
+        .then(data => {
+          addRecentScan(data);
+          window.location.href = `emergency_access.html?id=${qrId}`;
+        })
+        .catch(err => {
+          console.error('Error:', err);
+          // Still navigate to emergency_access page even if fetch fails
+          window.location.href = `emergency_access.html?id=${qrId}`;
+        });
     }
 
     function scanQRCode() {
       initQRScanner(
         (qrValue) => {
-          // Navigate to emergency access page with the scanned QR code
-          window.location.href = `emergency_access.html?id=${qrValue}`;
+          // Fetch patient data to track in recent scans
+          fetch(`${API_URL}/patient/profile/${qrValue}`)
+            .then(res => {
+              if (res.ok) return res.json();
+              throw new Error('Patient not found');
+            })
+            .then(data => {
+              addRecentScan(data);
+              window.location.href = `emergency_access.html?id=${qrValue}`;
+            })
+            .catch(err => {
+              console.error('Error:', err);
+              window.location.href = `emergency_access.html?id=${qrValue}`;
+            });
         },
         (error) => {
           showError('Camera error: ' + error);
-          // Fallback to emergency access page
           window.location.href = 'emergency_access.html';
         }
       );
       
-      // Start scanning
       startQRScanner();
     }
 

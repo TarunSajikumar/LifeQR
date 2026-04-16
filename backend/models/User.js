@@ -49,6 +49,53 @@ const userSchema = new mongoose.Schema({
     lng: Number,
     updatedAt: Date
   },
+  publicProfile: {
+    type: Boolean,
+    default: true
+  },
+  reports: [
+    {
+      filename: String,
+      originalName: String,
+      mimeType: String,
+      url: String,
+      category: String,
+      description: String,
+      uploadedAt: Date
+    }
+  ],
+  activities: [
+    {
+      type: String,
+      title: String,
+      description: String,
+      metadata: mongoose.Schema.Types.Mixed,
+      timestamp: Date
+    }
+  ],
+  sosAlerts: [
+    {
+      status: {
+        type: String,
+        default: 'pending'
+      },
+      location: {
+        lat: Number,
+        lng: Number
+      },
+      message: String,
+      sentTo: [String],
+      createdAt: Date
+    }
+  ],
+  authorizedDoctors: [
+    {
+      doctorId: mongoose.Schema.Types.ObjectId,
+      name: String,
+      email: String,
+      grantedAt: Date
+    }
+  ],
   
   // Doctor-specific fields
   specialization: String,
