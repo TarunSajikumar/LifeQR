@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const PatientProfile = require('../../models/PatientProfile');
+const User = require('../../models/User');
 const { authenticateToken } = require('../../middleware/auth');
 const { logEvent } = require('../../services/securityLogger');
 
@@ -64,7 +65,7 @@ router.post('/upload', authenticateToken, (req, res) => {
         filename: req.file.filename,
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
-        url: `/uploads/reports/${req.file.filename}`,
+        url: `/api/v1/reports/${req.file.filename}`,
         category: category || 'General',
         description: description || '',
         uploadedAt: new Date()
@@ -128,6 +129,88 @@ router.get('/', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching reports:', error);
     res.status(500).json({ error: 'Failed to fetch reports list' });
+  }
+});
+
+/**
+ * Secure medical report streaming endpoint.
+ * 
+ * Pipeline:
+ * 1. Cookie authentication
+ * 2. Role check (patient for own report, authorized doctor)
+ * 3. Patient authorization check for doctors
+ * 4. Audit log
+ * 5. Stream file with correct Content-Type
+ * 
+ * Medical reports are NEVER served via static file serving.
+ */
+router.get('/:reportId', authenticateToken, async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    
+    // Sanitize reportId to prevent path traversal attacks
+    const sanitizedReportId = path.basename(reportId);
+    if (sanitizedReportId !== reportId || reportId.includes('..')) {
+      return res.status(400).json({ error: 'Invalid report identifier' });
+    }
+
+    // Find which patient this report belongs to
+    const profile = await PatientProfile.findOne({
+      'reports.filename': sanitizedReportId
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Medical report not found' });
+    }
+
+    const report = profile.reports.find(r => r.filename === sanitizedReportId);
+    if (!report) {
+      return res.status(404).json({ error: 'Medical report not found' });
+    }
+
+    // Authorization check
+    const isOwner = String(profile.userId) === String(req.user.userId);
+    const isAuthorizedDoctor = req.user.role === 'doctor' && profile.authorizedDoctors.some(
+      doc => String(doc.doctorId) === String(req.user.userId)
+    );
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isOwner && !isAuthorizedDoctor && !isAdmin) {
+      logEvent('REPORT_ACCESS_DENIED', {
+        userId: req.user.userId,
+        role: req.user.role,
+        reportId: sanitizedReportId,
+        patientId: profile.userId
+      });
+      return res.status(403).json({ error: 'You are not authorized to view this medical report' });
+    }
+
+    // Verify file exists on disk
+    const filePath = path.join(reportsDir, sanitizedReportId);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Report file not found on server' });
+    }
+
+    // Audit log the access
+    logEvent('REPORT_ACCESSED', {
+      userId: req.user.userId,
+      role: req.user.role,
+      reportId: sanitizedReportId,
+      patientId: profile.userId,
+      originalName: report.originalName
+    });
+
+    // Stream the file with correct content type
+    res.setHeader('Content-Type', report.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${report.originalName}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+  } catch (error) {
+    console.error('Error streaming medical report:', error);
+    res.status(500).json({ error: 'Failed to retrieve medical report' });
   }
 });
 

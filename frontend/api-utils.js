@@ -14,18 +14,12 @@ window.parseApiResponse = async function(response) {
 };
 
 window.verifyToken = async function() {
-  const token = localStorage.getItem('token');
-  if (!token) return null;
-
   try {
     const response = await fetch(`${window.API_URL}/auth/verify`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      credentials: 'include'
     });
 
     if (!response.ok) {
-      localStorage.removeItem('token');
       return null;
     }
 
@@ -47,4 +41,16 @@ window.verifyToken = async function() {
   }
 
   return null;
+};
+
+/**
+ * Helper for authenticated fetch requests.
+ * All requests use credentials: 'include' for httpOnly cookie auth.
+ * No localStorage token or Authorization header needed.
+ */
+window.authFetch = function(url, options = {}) {
+  return fetch(url, {
+    ...options,
+    credentials: 'include'
+  });
 };

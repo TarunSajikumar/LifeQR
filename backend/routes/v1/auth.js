@@ -7,6 +7,7 @@ const User = require('../../models/User');
 const PatientProfile = require('../../models/PatientProfile');
 const DoctorProfile = require('../../models/DoctorProfile');
 const CrewProfile = require('../../models/CrewProfile');
+const EmergencyCredential = require('../../models/EmergencyCredential');
 const { getFrontendUrl } = require('../../utils/frontendUrl');
 const { sendEmail } = require('../../services/emailService');
 const { logEvent } = require('../../services/securityLogger');
@@ -34,6 +35,14 @@ function formatNamePrefix(name) {
   const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
   if (cleaned.length === 0) return 'USR';
   return cleaned.length <= 3 ? cleaned : cleaned.slice(0, 3);
+}
+
+function createEmergencyToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function hashEmergencyToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 // Secure collision-resistant QR ID generation
@@ -82,13 +91,18 @@ router.post('/register', async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!name || !email || !password || !role) {
-      return res.status(400).json({ error: 'Name, email, password, and role are required' });
+    if (!name || !email || !password || !role || !gender) {
+      return res.status(400).json({ error: 'Name, email, gender, password, and role are required' });
     }
 
     // Role verification
     if (!['patient', 'doctor', 'crew'].includes(role)) {
       return res.status(400).json({ error: 'Invalid user role specified' });
+    }
+
+    // Gender verification
+    if (!['male', 'female', 'other'].includes(String(gender).toLowerCase())) {
+      return res.status(400).json({ error: 'Please select a valid gender option (male, female, or other)' });
     }
 
     // Strong email format validation
@@ -115,7 +129,7 @@ router.post('/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create base user
+    // Create base user — patients auto-verified, doctor/crew start PENDING
     const user = await User.create({
       name,
       email,
@@ -125,14 +139,16 @@ router.post('/register', async (req, res) => {
       phone,
       address,
       city,
-      state
+      state,
+      verificationStatus: role === 'patient' ? 'VERIFIED' : 'PENDING'
     });
 
     // Create role-specific profiles
     if (role === 'patient') {
       const qrCodeId = await generateSecureQrCodeId(name);
       const frontendUrl = getFrontendUrl();
-      const qrUrl = `${frontendUrl}/emergency_access.html?id=${qrCodeId}`;
+      const emergencyToken = createEmergencyToken();
+      const qrUrl = `${frontendUrl}/e/${emergencyToken}`;
 
       const qrCodeDataURL = await QRCode.toDataURL(qrUrl, {
         errorCorrectionLevel: 'H',
@@ -163,7 +179,7 @@ router.post('/register', async (req, res) => {
         });
       }
 
-      await PatientProfile.create({
+      const patientProfile = await PatientProfile.create({
         userId: user._id,
         age,
         bloodGroup,
@@ -173,6 +189,19 @@ router.post('/register', async (req, res) => {
         emergencyContacts: parsedContacts,
         qrCode: qrCodeDataURL,
         qrCodeId
+      });
+
+      await EmergencyCredential.create({
+        patientId: patientProfile._id,
+        credentialType: 'QR',
+        tokenHash: hashEmergencyToken(emergencyToken),
+        tokenPrefix: 'EMG',
+        status: 'ACTIVE',
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+        metadata: {
+          createdBy: user._id,
+          label: 'Primary Emergency Credential'
+        }
       });
     } else if (role === 'doctor') {
       if (!specialization || !licenseNumber || !hospital) {
@@ -222,13 +251,13 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({ 
       message: 'Registration successful',
-      token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        gender: user.gender
+        gender: user.gender,
+        verificationStatus: user.verificationStatus
       }
     });
   } catch (error) {
@@ -292,13 +321,13 @@ router.post('/login', async (req, res) => {
 
     res.json({ 
       message: 'Login successful',
-      token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        gender: user.gender
+        gender: user.gender,
+        verificationStatus: user.verificationStatus
       }
     });
   } catch (error) {
@@ -310,7 +339,8 @@ router.post('/login', async (req, res) => {
 // Verify token route
 router.get('/verify', async (req, res) => {
   try {
-    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    // Cookie-only — no Bearer token fallback
+    const token = req.cookies.token;
     
     if (!token) {
       return res.status(401).json({ error: 'No token provided' });
@@ -345,6 +375,7 @@ router.get('/verify', async (req, res) => {
         email: user.email,
         role: user.role,
         gender: user.gender,
+        verificationStatus: user.verificationStatus,
         qrCode,
         qrCodeId
       }

@@ -46,10 +46,10 @@ router.post('/sos', authenticateToken, async (req, res) => {
     
     await profile.save();
 
-    // Broadcast Socket.IO event to all active rescue sessions
+    // Broadcast SOS event to verified crew members only
     const io = req.app.get('io');
     if (io) {
-      io.emit('sos-alert', {
+      io.to('crew:all').emit('sos-alert', {
         sosId: profile.sosAlerts[0]._id,
         patientId: patient._id,
         name: patient.name,
@@ -62,7 +62,7 @@ router.post('/sos', authenticateToken, async (req, res) => {
         emergencyContacts: profile.emergencyContacts,
         timestamp: new Date()
       });
-      console.log('📶 Real-time SOS alert broadcasted via Socket.IO');
+      console.log('📶 Real-time SOS alert sent to crew room via Socket.IO');
     }
 
     // Trigger emails to emergency contacts
@@ -123,10 +123,17 @@ router.post('/acknowledge/:qrCodeId/:sosId', authenticateToken, async (req, res)
 
     await profile.save();
 
-    // Broadcast updated socket event so other dashboard interfaces update in real-time
+    // Emit targeted socket events to specific rooms
     const io = req.app.get('io');
     if (io) {
-      io.emit('sos-acknowledged', {
+      // Notify the patient that their SOS was acknowledged
+      io.to(`patient:${profile.userId}`).emit('sos-acknowledged', {
+        sosId,
+        responderName: responder.name,
+        responderRole: responder.role
+      });
+      // Notify other crew members about the acknowledgement
+      io.to('crew:all').emit('sos-acknowledged', {
         sosId,
         responderName: responder.name,
         responderRole: responder.role

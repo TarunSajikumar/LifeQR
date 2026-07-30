@@ -66,7 +66,7 @@
           </div>
           <div>
             <label class="block text-sm font-semibold mb-2">Phone</label>
-            <input type="tel" id="phone" name="phone" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            <input type="tel" id="phone" name="phone" value="+91 " placeholder="+91 9876543210" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
           </div>
         </div>
         <div>
@@ -82,9 +82,9 @@
         <div>
           <label class="block text-sm font-semibold mb-2">Password *</label>
           <div class="relative">
-            <input type="password" id="password" name="password" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-            <button type="button" onclick="togglePasswordVisibility('password', 'password-toggle-icon')" class="absolute right-3 top-3 text-gray-500">
-              <span id="password-toggle-icon" class="material-symbols-outlined text-xl">visibility</span>
+            <input type="password" id="password" name="password" required class="w-full px-4 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            <button type="button" onclick="window.togglePasswordVisibility('password', 'password-toggle-icon')" class="absolute right-3 top-3 text-gray-500 hover:text-purple-600 focus:outline-none z-10 p-1">
+              <span id="password-toggle-icon" class="material-symbols-outlined text-xl select-none pointer-events-none">visibility</span>
             </button>
           </div>
           <!-- Password strength indicator -->
@@ -99,9 +99,9 @@
         <div>
           <label class="block text-sm font-semibold mb-2">Confirm Password *</label>
           <div class="relative">
-            <input type="password" id="confirmPassword" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-            <button type="button" onclick="togglePasswordVisibility('confirmPassword', 'confirm-password-toggle-icon')" class="absolute right-3 top-3 text-gray-500">
-              <span id="confirm-password-toggle-icon" class="material-symbols-outlined text-xl">visibility</span>
+            <input type="password" id="confirmPassword" required class="w-full px-4 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            <button type="button" onclick="window.togglePasswordVisibility('confirmPassword', 'confirm-password-toggle-icon')" class="absolute right-3 top-3 text-gray-500 hover:text-purple-600 focus:outline-none z-10 p-1">
+              <span id="confirm-password-toggle-icon" class="material-symbols-outlined text-xl select-none pointer-events-none">visibility</span>
             </button>
           </div>
         </div>
@@ -149,7 +149,7 @@
               <span class="font-bold text-xs text-purple-700">Contact #1 (Primary)</span>
               <div class="grid md:grid-cols-3 gap-3">
                 <input type="text" placeholder="Name" name="emergencyContactName1" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                <input type="tel" placeholder="Phone" name="emergencyContactPhone1" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <input type="tel" placeholder="Phone" value="+91 " name="emergencyContactPhone1" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <input type="text" placeholder="Relationship" name="emergencyContactRelationship1" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
               </div>
             </div>
@@ -158,7 +158,7 @@
               <span class="font-bold text-xs text-purple-700">Contact #2</span>
               <div class="grid md:grid-cols-3 gap-3">
                 <input type="text" placeholder="Name" name="emergencyContactName2" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                <input type="tel" placeholder="Phone" name="emergencyContactPhone2" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <input type="tel" placeholder="Phone" value="+91 " name="emergencyContactPhone2" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <input type="text" placeholder="Relationship" name="emergencyContactRelationship2" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
               </div>
             </div>
@@ -241,9 +241,10 @@
     }
 
     // Toggle Password Visibility
-    function togglePasswordVisibility(fieldId, iconId) {
+    window.togglePasswordVisibility = function(fieldId, iconId) {
       const input = document.getElementById(fieldId);
       const icon = document.getElementById(iconId);
+      if (!input || !icon) return;
       if (input.type === 'password') {
         input.type = 'text';
         icon.textContent = 'visibility_off';
@@ -251,7 +252,7 @@
         input.type = 'password';
         icon.textContent = 'visibility';
       }
-    }
+    };
 
     // Real-time password strength indicator
     const passwordInput = document.getElementById('password');
@@ -306,7 +307,12 @@
       const submitBtn = document.getElementById('submitBtn');
       const password = document.getElementById('password').value;
       const confirmPassword = document.getElementById('confirmPassword').value;
-      
+      const gender = document.getElementById('gender').value;
+      if (!gender) {
+        showToast('Please select your gender (Male, Female, or Other).', 'error');
+        return;
+      }
+
       // Confirm password validation
       if (password !== confirmPassword) {
         showToast('Passwords do not match!', 'error');
@@ -356,6 +362,7 @@
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify(data)
         });
         
@@ -365,8 +372,7 @@
           throw new Error(result.error || 'Registration failed');
         }
         
-        localStorage.clear();
-        localStorage.setItem('token', result.token);
+        // Store only non-sensitive UI routing data (no JWT token)
         localStorage.setItem('userRole', result.user.role || 'patient');
         localStorage.setItem('userName', result.user.name || 'User');
         localStorage.setItem('userId', result.user.id);
@@ -388,6 +394,29 @@
         submitBtn.disabled = false;
         submitBtn.textContent = 'Create Account';
       }
+    });
+
+    // Auto-fill and format +91 for phone inputs
+    document.querySelectorAll('input[type="tel"]').forEach(input => {
+      if (!input.value.trim()) {
+        input.value = '+91 ';
+      }
+      input.addEventListener('focus', () => {
+        if (!input.value.trim()) {
+          input.value = '+91 ';
+        }
+      });
+      input.addEventListener('input', () => {
+        const raw = input.value.trim();
+        if (!raw.startsWith('+91')) {
+          const digits = raw.replace(/[^0-9]/g, '');
+          if (digits.startsWith('91')) {
+            input.value = '+' + digits.slice(0, 2) + ' ' + digits.slice(2);
+          } else if (digits.length > 0) {
+            input.value = '+91 ' + digits;
+          }
+        }
+      });
     });
 
     // Initialize default patient selection

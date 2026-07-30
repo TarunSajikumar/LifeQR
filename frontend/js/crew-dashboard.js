@@ -19,10 +19,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function initSocketConnection() {
   try {
-    const socket = io();
-    
-    // Join room for crew members
-    socket.emit('join-room', 'emergency_crew');
+    // Socket.IO auto-authenticates via httpOnly cookie
+    // Server assigns crew:all room based on verified role
+    const socket = io({ withCredentials: true });
 
     // Real-time SOS Triggered alert listener
     socket.on('sos-alert', (data) => {
@@ -56,7 +55,8 @@ function showSosAlertPopup(data) {
     try {
       const response = await fetch(`/api/v1/sos/acknowledge/${data.patientId}/${data.sosId}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
       });
       const res = await response.json();
       if (!response.ok) throw new Error(res.error);
@@ -92,7 +92,7 @@ window.searchPatient = async function() {
 
   try {
     const response = await fetch(`/api/v1/patient/profile/${qrId}`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Patient not found');
@@ -114,7 +114,7 @@ async function logCrewScan(qrCodeId) {
   try {
     await fetch(`/api/v1/patient/log-scan/${qrCodeId}`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
   } catch (e) {
     console.warn('Failed to log crew scan activity.');
@@ -219,9 +219,9 @@ async function logIncidentEvent(eventText) {
     await fetch(`/api/v1/history/add/${activePatient.qrCodeId}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({
         type: 'vital', // save under vitals/symptoms
         title: 'Emergency Crew Checkpoint',

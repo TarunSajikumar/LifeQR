@@ -49,6 +49,7 @@ async function createDemoAccount() {
       email: "tarunsajikumar123@gmail.com",
       password: hashedPassword,
       role: "patient",
+      gender: "male",
       age: 28,
       bloodGroup: "O+",
       healthIssues: "None",

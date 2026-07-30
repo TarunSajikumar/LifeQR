@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadAdminStats() {
   try {
     const response = await fetch('/api/v1/admin/stats', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -38,7 +38,7 @@ async function loadAdminStats() {
 async function loadAdminUsers() {
   try {
     const response = await fetch('/api/v1/admin/users', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -109,9 +109,9 @@ window.toggleUserStatus = async function(userId, activeState) {
     const response = await fetch(`/api/v1/admin/users/${userId}/toggle-status`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({ active: activeState })
     });
     const data = await response.json();

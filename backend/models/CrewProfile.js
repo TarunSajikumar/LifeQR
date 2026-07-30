@@ -19,6 +19,10 @@ const crewProfileSchema = new mongoose.Schema({
   station: {
     type: String,
     required: true
+  },
+  organization: {
+    type: String,
+    default: ''
   }
 }, {
   timestamps: true

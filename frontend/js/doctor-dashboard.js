@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadAuthorizedPatients() {
   try {
     const response = await fetch('/api/v1/doctor-access/patients', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -72,7 +72,7 @@ window.searchPatient = async function() {
   try {
     // 1. Get access status details
     const response = await fetch(`/api/v1/doctor-access/status/${qrId}`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Patient not found');
@@ -94,7 +94,7 @@ async function logDoctorScan(qrCodeId) {
   try {
     await fetch(`/api/v1/patient/log-scan/${qrCodeId}`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
   } catch (e) {
     console.warn('Failed to log doctor scan activity.');
@@ -183,9 +183,9 @@ window.requestAccess = async function() {
     const response = await fetch('/api/v1/doctor-access/request-access', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({ qrCodeId: activePatient.qrCodeId })
     });
     const data = await response.json();
@@ -202,7 +202,7 @@ window.requestAccess = async function() {
 async function loadPatientMedicalHistory(qrCodeId) {
   try {
     const response = await fetch(`/api/v1/history/${qrCodeId}`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -248,7 +248,7 @@ async function loadPatientReports(qrCodeId) {
     // Doctors read patient reports list if permitted
     // We make a call to get patient reports which returns empty list if restricted
     const response = await fetch(`/api/v1/patient/profile/${qrCodeId}`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     
@@ -259,7 +259,7 @@ async function loadPatientReports(qrCodeId) {
     // Let's call details endpoint /doctor/patient/:id if authorized
     if (activePatient.isAuthorized) {
       const detailsResponse = await fetch(`/api/v1/patient/profile/${qrCodeId}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        credentials: 'include'
       });
       // In this refactoring, doctors access files from authorized list:
       // Let's implement getting reports list for doctors
@@ -286,9 +286,9 @@ function setupDoctorListeners() {
       const response = await fetch(`/api/v1/history/add/${activePatient.qrCodeId}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ type: 'treatment', title, description })
       });
       const res = await response.json();

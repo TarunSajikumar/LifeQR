@@ -21,8 +21,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function initSocketConnection() {
   try {
-    const socket = io();
-    socket.emit('join-room', `patient_${currentUser.id}`);
+    // Socket.IO auto-authenticates via httpOnly cookie
+    // Server assigns patient:{userId} room based on verified role
+    const socket = io({ withCredentials: true });
     
     // Listen for authorized doctor accesses or SOS status updates
     socket.on('sos-acknowledged', (data) => {
@@ -38,7 +39,7 @@ async function loadDashboardData() {
   showSkeletons();
   try {
     const response = await fetch('/api/v1/patient/me', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     
@@ -74,7 +75,7 @@ function hideSkeletons() {
 function renderProfileDetails() {
   document.getElementById('userName').textContent = currentUser.name;
   document.getElementById('profileName').value = currentUser.name || '';
-  document.getElementById('profilePhone').value = currentUser.phone || '';
+  document.getElementById('profilePhone').value = currentUser.phone || '+91 ';
   document.getElementById('profileAddress').value = currentUser.address || '';
   document.getElementById('profileCity').value = currentUser.city || '';
   document.getElementById('profileState').value = currentUser.state || '';
@@ -89,7 +90,7 @@ function renderProfileDetails() {
   // Render profile photo
   const photoEl = document.getElementById('userProfilePhoto');
   if (currentUser.profilePhoto) {
-    photoEl.src = currentUser.profilePhoto;
+    photoEl.src = '/api/v1/patient/photo';
   } else {
     photoEl.src = 'https://www.w3schools.com/howto/img_avatar.png'; // default avatar
   }
@@ -126,7 +127,7 @@ function renderProfileDetails() {
     const phoneInput = document.getElementById(`emergencyContactPhone${i}`);
     const relInput = document.getElementById(`emergencyContactRelationship${i}`);
     if (nameInput) nameInput.value = contact.name || '';
-    if (phoneInput) phoneInput.value = contact.phone || '';
+    if (phoneInput) phoneInput.value = contact.phone || '+91 ';
     if (relInput) relInput.value = contact.relationship || '';
   }
 }
@@ -147,7 +148,7 @@ function renderQRDetails() {
 async function loadReports() {
   try {
     const response = await fetch(`/api/v1/reports?page=${reportsPage}&limit=4`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -193,7 +194,7 @@ async function loadActivities() {
   try {
     // Read activities list
     const response = await fetch(`/api/v1/patient/me`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -249,7 +250,7 @@ async function loadActivities() {
 async function loadAccessRequests() {
   try {
     const response = await fetch('/api/v1/doctor-access/requests', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -290,9 +291,9 @@ window.respondToRequest = async function(requestId, approve) {
     const response = await fetch('/api/v1/doctor-access/respond', {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}` 
+        'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({ requestId, approve })
     });
     const data = await response.json();
@@ -308,7 +309,7 @@ window.respondToRequest = async function(requestId, approve) {
 async function loadMedicalHistory() {
   try {
     const response = await fetch('/api/v1/history', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
@@ -426,9 +427,9 @@ function setupFormListeners() {
       const response = await fetch('/api/v1/patient/update', {
         method: 'PUT',
         headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify(data)
       });
       const res = await response.json();
@@ -455,7 +456,7 @@ function setupFormListeners() {
       const formData = new FormData(e.target);
       const response = await fetch('/api/v1/reports/upload', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        credentials: 'include',
         body: formData
       });
       const res = await response.json();
@@ -479,9 +480,9 @@ function setupFormListeners() {
       const response = await fetch('/api/v1/patient/visibility', {
         method: 'PUT',
         headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ publicProfile: e.target.checked })
       });
       const res = await response.json();
@@ -507,9 +508,9 @@ function setupFormListeners() {
       const response = await fetch('/api/v1/history/add', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ type, title, description })
       });
       const res = await response.json();
@@ -538,7 +539,7 @@ window.uploadProfilePhoto = async function() {
   try {
     const response = await fetch('/api/v1/patient/upload-photo', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      credentials: 'include',
       body: formData
     });
     const res = await response.json();
@@ -556,7 +557,7 @@ window.regenerateQR = async function() {
   try {
     const response = await fetch('/api/v1/patient/regenerate-qr', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      credentials: 'include'
     });
     const res = await response.json();
     if (!response.ok) throw new Error(res.error);
@@ -584,9 +585,9 @@ window.triggerEmergencySOS = async function() {
       const response = await fetch('/api/v1/sos/sos', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ lat, lng, message: 'Emergency Patient SOS Triggered!' })
       });
       const data = await response.json();
@@ -609,9 +610,9 @@ async function triggerSOSWithFallback() {
     const response = await fetch('/api/v1/sos/sos', {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({ lat: 0, lng: 0, message: 'SOS Alert - Geolocation unavailable' })
     });
     const data = await response.json();
@@ -636,9 +637,9 @@ window.shareLiveLocation = function() {
       const response = await fetch('/api/v1/patient/location', {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
       });
       if (!response.ok) throw new Error();
@@ -689,3 +690,25 @@ window.downloadWalletCard = function() {
 window.downloadQR = function() {
   window.print();
 };
+
+// Auto-fill and format +91 for phone inputs in patient dashboard
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('input[type="tel"]').forEach(input => {
+    input.addEventListener('focus', () => {
+      if (!input.value.trim()) {
+        input.value = '+91 ';
+      }
+    });
+    input.addEventListener('input', () => {
+      const raw = input.value.trim();
+      if (!raw.startsWith('+91')) {
+        const digits = raw.replace(/[^0-9]/g, '');
+        if (digits.startsWith('91')) {
+          input.value = '+' + digits.slice(0, 2) + ' ' + digits.slice(2);
+        } else if (digits.length > 0) {
+          input.value = '+91 ' + digits;
+        }
+      }
+    });
+  });
+});

@@ -18,6 +18,13 @@ const doctorProfileSchema = new mongoose.Schema({
   hospital: {
     type: String,
     required: true
+  },
+  registrationCouncil: {
+    type: String,
+    default: ''
+  },
+  registrationYear: {
+    type: Number
   }
 }, {
   timestamps: true

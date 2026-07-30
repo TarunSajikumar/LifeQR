@@ -71,10 +71,14 @@ const translations = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
-  const qrId = urlParams.get('id');
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  const pathToken = pathParts[pathParts.length - 1];
+  const token = (pathToken && pathToken !== 'emergency_access.html' && pathToken !== 'e')
+    ? pathToken
+    : (urlParams.get('token') || urlParams.get('id'));
 
-  if (!qrId) {
-    showToast('Invalid Access URL: QR ID missing', 'error');
+  if (!token) {
+    showToast('Invalid Access URL: emergency token missing', 'error');
     document.getElementById('emergencyDetailsCard').innerHTML = `
       <div class="text-center p-8 bg-red-50 text-red-800 rounded-3xl border border-red-200">
         <span class="material-symbols-outlined text-4xl">warning</span>
@@ -85,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  await fetchEmergencyProfile(qrId);
+  await fetchEmergencyProfile(token);
 
   // Setup Language Selector Change Listener
   document.getElementById('languageSelector').addEventListener('change', (e) => {
@@ -94,9 +98,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
-async function fetchEmergencyProfile(qrId) {
+async function fetchEmergencyProfile(token) {
   try {
-    const response = await fetch(`/api/v1/patient/profile/${qrId}`);
+    const response = await fetch(`/api/v1/emergency-access/${token}`);
     const data = await response.json();
     
     if (!response.ok) throw new Error(data.error || 'Failed to fetch medical details');
@@ -117,36 +121,28 @@ async function fetchEmergencyProfile(qrId) {
 
 function renderEmergencyDetails() {
   const container = document.getElementById('emergencyDetailsCard');
+  const patientName = currentPatient.firstName || currentPatient.name || 'Patient';
+  const photo = currentPatient.photo ? `/api/v1/emergency-access/${window.location.pathname.split('/').filter(Boolean).pop()}/photo` : 'https://www.w3schools.com/howto/img_avatar.png';
+  const allergies = currentPatient.allergies?.join ? currentPatient.allergies.join(', ') : (currentPatient.allergies || 'None');
+  const medications = currentPatient.currentMedications?.join ? currentPatient.currentMedications.join(', ') : (currentPatient.currentMedications || currentPatient.medications || 'None');
+  const conditions = currentPatient.medicalConditions?.join ? currentPatient.medicalConditions.join(', ') : (currentPatient.medicalConditions || currentPatient.healthIssues || 'None');
   
-  // Render profile photo
-  const photo = currentPatient.profilePhoto || 'https://www.w3schools.com/howto/img_avatar.png';
-  
-  // Check private visibility restrictions
-  let sensitiveDetailsHTML = '';
-  if (currentPatient.privateProfile) {
-    sensitiveDetailsHTML = `
-      <div class="p-4 bg-yellow-50 border border-yellow-100 text-yellow-800 rounded-2xl text-xs font-semibold text-center italic" id="lblPrivateMessage">
-        ${translations[currentLanguage].privateMessage}
+  let sensitiveDetailsHTML = `
+    <div class="grid md:grid-cols-3 gap-4">
+      <div class="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+        <p class="text-[10px] text-gray-400 font-bold uppercase" id="lblAllergies">${translations[currentLanguage].allergies}</p>
+        <p class="text-sm font-semibold text-gray-800 mt-1">${allergies}</p>
       </div>
-    `;
-  } else {
-    sensitiveDetailsHTML = `
-      <div class="grid md:grid-cols-3 gap-4">
-        <div class="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-          <p class="text-[10px] text-gray-400 font-bold uppercase" id="lblAllergies">${translations[currentLanguage].allergies}</p>
-          <p class="text-sm font-semibold text-gray-800 mt-1">${currentPatient.allergies || 'None'}</p>
-        </div>
-        <div class="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-          <p class="text-[10px] text-gray-400 font-bold uppercase" id="lblMedications">${translations[currentLanguage].medications}</p>
-          <p class="text-sm font-semibold text-gray-800 mt-1">${currentPatient.medications || 'None'}</p>
-        </div>
-        <div class="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-          <p class="text-[10px] text-gray-400 font-bold uppercase" id="lblConditions">${translations[currentLanguage].conditions}</p>
-          <p class="text-sm font-semibold text-gray-800 mt-1">${currentPatient.healthIssues || 'None'}</p>
-        </div>
+      <div class="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+        <p class="text-[10px] text-gray-400 font-bold uppercase" id="lblMedications">${translations[currentLanguage].medications}</p>
+        <p class="text-sm font-semibold text-gray-800 mt-1">${medications}</p>
       </div>
-    `;
-  }
+      <div class="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+        <p class="text-[10px] text-gray-400 font-bold uppercase" id="lblConditions">${translations[currentLanguage].conditions}</p>
+        <p class="text-sm font-semibold text-gray-800 mt-1">${conditions}</p>
+      </div>
+    </div>
+  `;
 
   // Render multiple emergency contacts
   let contactsHTML = '';
@@ -188,8 +184,8 @@ function renderEmergencyDetails() {
     <div class="flex items-center gap-4 mb-6 border-b border-gray-100 pb-4">
       <img src="${photo}" class="w-16 h-16 rounded-full object-cover border-2 border-red-200">
       <div>
-        <h3 class="font-headline text-2xl font-bold text-gray-900">${currentPatient.name}</h3>
-        <p class="text-xs text-gray-500 font-mono">QR Code ID: ${currentPatient.qrCodeId}</p>
+        <h3 class="font-headline text-2xl font-bold text-gray-900">${patientName}</h3>
+        <p class="text-xs text-gray-500 font-mono">Emergency Credential</p>
       </div>
     </div>
 

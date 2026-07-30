@@ -1,19 +1,12 @@
 // Client-side authentication guard for LifeQR
+// All auth uses httpOnly cookies — no localStorage token storage
 const API_BASE = '/api/v1';
 
 window.verifyAuth = async function() {
-  const token = localStorage.getItem('token');
-  
-  // We make a call to /verify route (which checks both Header and httpOnly cookies)
   try {
-    const headers = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
     const response = await fetch(`${API_BASE}/auth/verify`, {
       method: 'GET',
-      headers
+      credentials: 'include'
     });
     
     if (response.ok) {
@@ -24,8 +17,6 @@ window.verifyAuth = async function() {
     console.error('Auth verification error:', error);
   }
   
-  // Clear token if invalid
-  localStorage.removeItem('token');
   return null;
 };
 
@@ -69,10 +60,13 @@ function redirectUserToDashboard(role) {
 
 window.logout = async function() {
   try {
-    await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+    await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
   } catch (err) {
     console.error('Logout request failed:', err);
   }
-  localStorage.clear();
+  // Only clear non-sensitive UI routing data
+  localStorage.removeItem('userRole');
+  localStorage.removeItem('userName');
+  localStorage.removeItem('userId');
   window.location.href = 'index.html';
 };

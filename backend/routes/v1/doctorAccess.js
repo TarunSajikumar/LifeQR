@@ -4,13 +4,14 @@ const PatientProfile = require('../../models/PatientProfile');
 const DoctorProfile = require('../../models/DoctorProfile');
 const User = require('../../models/User');
 const { authenticateToken } = require('../../middleware/auth');
+const { requireVerified } = require('../../middleware/requireVerified');
 const { logEvent } = require('../../services/securityLogger');
 const { sendEmail } = require('../../services/emailService');
 
 const router = express.Router();
 
 // Doctor requests access to patient's private profile
-router.post('/request-access', authenticateToken, async (req, res) => {
+router.post('/request-access', authenticateToken, requireVerified, async (req, res) => {
   try {
     if (req.user.role !== 'doctor') {
       return res.status(403).json({ error: 'Only medical doctors can request patient profile access' });
@@ -247,7 +248,7 @@ router.post('/revoke', authenticateToken, async (req, res) => {
 });
 
 // Doctor checks connection with a specific patient
-router.get('/status/:qrCodeId', authenticateToken, async (req, res) => {
+router.get('/status/:qrCodeId', authenticateToken, requireVerified, async (req, res) => {
   try {
     if (req.user.role !== 'doctor') {
       return res.status(403).json({ error: 'Doctor access required' });
@@ -286,7 +287,7 @@ router.get('/status/:qrCodeId', authenticateToken, async (req, res) => {
 });
 
 // Doctor gets authorized patient list
-router.get('/patients', authenticateToken, async (req, res) => {
+router.get('/patients', authenticateToken, requireVerified, async (req, res) => {
   try {
     if (req.user.role !== 'doctor') {
       return res.status(403).json({ error: 'Doctor access required' });

@@ -1,11 +1,13 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const multer = require('multer');
 const QRCode = require('qrcode');
 const User = require('../../models/User');
 const PatientProfile = require('../../models/PatientProfile');
 const DoctorProfile = require('../../models/DoctorProfile');
+const EmergencyCredential = require('../../models/EmergencyCredential');
 const CrewProfile = require('../../models/CrewProfile');
 const { authenticateToken } = require('../../middleware/auth');
 const { getFrontendUrl } = require('../../utils/frontendUrl');
@@ -39,6 +41,64 @@ const uploadPhoto = multer({
       return cb(new Error('Invalid file type. Only JPEG, PNG, and JPG images are allowed.'), false);
     }
     cb(null, true);
+  }
+});
+
+async function ensureEmergencyCredential(profile) {
+  if (!profile) return null;
+
+  let credential = await EmergencyCredential.findOne({ patientId: profile._id, status: 'ACTIVE' }).sort({ createdAt: -1 });
+  if (credential) {
+    return credential;
+  }
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const credentialHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const newCredential = await EmergencyCredential.create({
+    patientId: profile._id,
+    credentialType: 'QR',
+    tokenHash: credentialHash,
+    tokenPrefix: 'EMG',
+    status: 'ACTIVE',
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+    metadata: { createdBy: profile.userId, label: 'Primary Emergency Credential' }
+  });
+
+  const credentialUrl = `${getFrontendUrl()}/e/${rawToken}`;
+  const qrCodeDataURL = await QRCode.toDataURL(credentialUrl, {
+    errorCorrectionLevel: 'H',
+    type: 'image/png',
+    width: 300,
+    margin: 2,
+    color: {
+      dark: '#000000',
+      light: '#FFFFFF'
+    }
+  });
+
+  profile.qrCode = qrCodeDataURL;
+  await profile.save();
+  return newCredential;
+}
+
+// Authenticated photo access for the current patient
+router.get('/photo', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.profilePhoto) {
+      return res.status(404).json({ error: 'No profile photo available' });
+    }
+
+    const filename = path.basename(user.profilePhoto);
+    const filePath = path.join(photosDir, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Profile photo not found' });
+    }
+
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error serving authenticated profile photo:', error);
+    res.status(500).json({ error: 'Failed to serve profile photo' });
   }
 });
 
@@ -132,6 +192,9 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     if (user.role === 'patient') {
       profileData = await PatientProfile.findOne({ userId: user._id });
+      if (profileData) {
+        await ensureEmergencyCredential(profileData);
+      }
     } else if (user.role === 'doctor') {
       profileData = await DoctorProfile.findOne({ userId: user._id });
     } else if (user.role === 'crew') {
@@ -210,19 +273,7 @@ router.put('/update', authenticateToken, async (req, res) => {
           }));
         }
 
-        // Regenerate QR code if frontend link URL needs updating
-        const frontendUrl = getFrontendUrl();
-        const qrUrl = `${frontendUrl}/emergency_access.html?id=${profile.qrCodeId}`;
-        const qrCodeDataURL = await QRCode.toDataURL(qrUrl, {
-          width: 300,
-          margin: 2,
-          color: {
-            dark: '#000000',
-            light: '#ffffff'
-          }
-        });
-        profile.qrCode = qrCodeDataURL;
-
+        await ensureEmergencyCredential(profile);
         await profile.save();
       }
     } else if (user.role === 'doctor') {

@@ -2,10 +2,11 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
 const authenticateToken = (req, res, next) => {
-  const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+  // Cookie-only authentication — no Bearer token fallback
+  const token = req.cookies.token;
   
   if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
+    return res.status(401).json({ error: 'Access denied. No session found.' });
   }
 
   try {
@@ -16,7 +17,7 @@ const authenticateToken = (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    res.status(401).json({ error: 'Invalid or expired session' });
   }
 };
 

@@ -10,6 +10,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const cookieParser = require("cookie-parser");
 const socketIo = require("socket.io");
+const jwt = require("jsonwebtoken");
 const { getFrontendUrl, isSecureUrl } = require("./utils/frontendUrl");
 require("dotenv").config();
 
@@ -24,7 +25,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://fonts.material.com", "https://fonts.googleapis.com/css2"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://lifeqr-new.onrender.com", "/uploads/photos/", "/uploads/reports/"],
+      imgSrc: ["'self'", "data:", "blob:", "https://lifeqr-new.onrender.com"],
       connectSrc: ["'self'", "https://lifeqr-new.onrender.com", "ws:", "wss:", "http://localhost:5000", "https://localhost:5000"]
     }
   }
@@ -65,7 +66,9 @@ app.use(cookieParser());
 
 // Serve static files from frontend
 app.use(express.static(path.join(__dirname, '../frontend')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/photos', (req, res) => {
+  res.status(404).json({ error: 'Photo access is restricted and not publicly available' });
+});
 
 // API Version 1 Routes
 const authRoutes = require("./routes/v1/auth");
@@ -75,6 +78,8 @@ const reportsRoutes = require("./routes/v1/reports");
 const medicalHistoryRoutes = require("./routes/v1/medicalHistory");
 const doctorAccessRoutes = require("./routes/v1/doctorAccess");
 const adminRoutes = require("./routes/v1/admin");
+const verificationRoutes = require("./routes/v1/verification");
+const emergencyCredentialRoutes = require("./routes/v1/emergencyCredentials");
 
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/patient", patientProfileRoutes);
@@ -83,6 +88,13 @@ app.use("/api/v1/reports", reportsRoutes);
 app.use("/api/v1/history", medicalHistoryRoutes);
 app.use("/api/v1/doctor-access", doctorAccessRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/verification", verificationRoutes);
+app.use("/api/v1/emergency-credentials", emergencyCredentialRoutes);
+app.use("/api/v1/emergency-access", emergencyCredentialRoutes);
+
+app.get('/e/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/emergency_access.html'));
+});
 
 // Health check route
 app.get("/api/v1/health", (req, res) => {
@@ -176,13 +188,51 @@ const startServer = async () => {
     // Make Socket.IO available to routes
     app.set('io', io);
 
+    // Socket.IO authentication middleware — verify JWT from cookie
+    io.use((socket, next) => {
+      try {
+        const cookieHeader = socket.handshake.headers.cookie;
+        if (!cookieHeader) {
+          return next(new Error('Authentication required'));
+        }
+
+        // Parse the token cookie from the cookie header
+        const tokenMatch = cookieHeader.split(';')
+          .map(c => c.trim())
+          .find(c => c.startsWith('token='));
+
+        if (!tokenMatch) {
+          return next(new Error('Authentication required'));
+        }
+
+        const token = tokenMatch.split('=')[1];
+        if (!token) {
+          return next(new Error('Authentication required'));
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.user = decoded; // { userId, role }
+        next();
+      } catch (err) {
+        next(new Error('Invalid or expired session'));
+      }
+    });
+
+    // Server-assigned rooms based on verified user role
     io.on('connection', (socket) => {
-      console.log(`🔌 New client connected to Socket.IO: ${socket.id}`);
-      
-      socket.on('join-room', (room) => {
-        socket.join(room);
-        console.log(`👤 Client joined notification room: ${room}`);
-      });
+      const { userId, role } = socket.user;
+      console.log(`🔌 Authenticated client connected: ${socket.id} (${role}:${userId})`);
+
+      // Assign rooms based on verified role — client cannot choose rooms
+      if (role === 'patient') {
+        socket.join(`patient:${userId}`);
+      } else if (role === 'doctor') {
+        socket.join(`doctor:${userId}`);
+      } else if (role === 'crew') {
+        socket.join('crew:all');
+      } else if (role === 'admin') {
+        socket.join('admin:all');
+      }
 
       socket.on('disconnect', () => {
         console.log(`🔌 Client disconnected: ${socket.id}`);

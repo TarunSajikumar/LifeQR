@@ -25,10 +25,10 @@ const userSchema = new mongoose.Schema({
   },
   gender: {
     type: String,
-    enum: ['male', 'female', 'other', ''],
+    required: true,
+    enum: ['male', 'female', 'other'],
     lowercase: true,
-    trim: true,
-    default: ''
+    trim: true
   },
   phone: String,
   address: String,
@@ -46,6 +46,20 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  verificationStatus: {
+    type: String,
+    enum: ['PENDING', 'UNDER_REVIEW', 'VERIFIED', 'SUSPENDED', 'REVOKED'],
+    default: 'PENDING'
+  },
+  verificationNote: {
+    type: String,
+    default: ''
+  },
+  verificationReviewedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  verificationReviewedAt: Date,
   resetPasswordToken: String,
   resetPasswordExpires: Date
 }, {

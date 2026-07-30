@@ -2,6 +2,7 @@ const express = require('express');
 const PatientProfile = require('../../models/PatientProfile');
 const User = require('../../models/User');
 const { authenticateToken } = require('../../middleware/auth');
+const { requireVerified } = require('../../middleware/requireVerified');
 const { logEvent } = require('../../services/securityLogger');
 
 const router = express.Router();
@@ -65,7 +66,7 @@ router.get('/:qrCodeId?', authenticateToken, async (req, res) => {
 });
 
 // Add timeline entry (vitals/symptoms by patient, treatments by doctor)
-router.post('/add/:qrCodeId?', authenticateToken, async (req, res) => {
+router.post('/add/:qrCodeId?', authenticateToken, requireVerified, async (req, res) => {
   try {
     const { type, title, description } = req.body;
     if (!type || !title || !description) {
